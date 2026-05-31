@@ -10,7 +10,7 @@ directamente desde sus repos de GitHub, así que aquí no hay código de aplicac
 
 - Backend: <https://github.com/PaulaR17/backend_pc2_grupo1>
 - Frontend: <https://github.com/PaulaR17/frontend_pc2_grupo1>
-- PC1 (ETL + ML): <https://github.com/MatiuxG/Proyecto-de-Computacion-I> (no se despliega aquí)
+- PC1 (ETL + ML): <https://github.com/MatiuxG/Proyecto-de-Computacion-I> (se clona dentro de la imagen del backend durante el build)
 
 ## Requisitos en la MV
 
