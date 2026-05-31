@@ -1,43 +1,9 @@
-# Despliegue de EcoTraffic en la MV de LORCA.
-#
-# Este compose levanta los 3 servicios necesarios:
-#   - postgres  : base de datos (volumen persistente)
-#   - backend   : Laravel (php-fpm en :9000), se construye desde el repo de GitHub
-#   - frontend  : Angular compilado + nginx, se construye desde el repo de GitHub
-#
-# Antes de "docker compose up -d --build":
-#   1. cp .env.sample .env  y rellena los valores reales
-#   2. anade en /etc/hosts:   <IP de LORCA>   ecotraffic.local
-#
-# Notas:
-#   - El nginx que ve el usuario es el del container "frontend": sirve la SPA
-#     en "/" y hace fastcgi a "backend:9000" cuando la ruta empieza por "/api".
-#   - PC1 (machine learning) no esta incluido aqui. Las predicciones se
-#     cargan en la tabla "predictions" ejecutando PC1 localmente contra la
-#     BD de LORCA cuando haga falta.
+#despliegue de EcoTraffic en LORCA usando el container postgres "pc2-db" ya existente (ver README)
 
 services:
 
-  postgres:
-    image: postgres:14-alpine
-    container_name: ecotraffic_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${DB_DATABASE}
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - eco-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
-      interval: 5s
-      retries: 10
-
   backend:
-    # Docker clona el repo de GitHub al construir, asi no hace falta tener
-    # el codigo de back en local. Cambia el "#main" si trabajas en otra rama.
+    #docker clona el repo de GitHub durante el build
     build:
       context: https://github.com/PaulaR17/backend_pc2_grupo1.git#main
     container_name: ecotraffic_backend
@@ -45,16 +11,25 @@ services:
     env_file: .env
     environment:
       DB_CONNECTION: pgsql
-      DB_HOST: postgres
+      #pc2-db = nombre del container postgres existente en la red pc2-stack_default
+      DB_HOST: pc2-db
       DB_PORT: 5432
+      #PC1 corre en el mismo container, sin SSH
+      ML_USE_SSH: "false"
+      ML_PROJECT_PATH: /opt/pc1
+      ML_PYTHON_BIN: /opt/pc1-venv/bin/python
+      #PC1 lee estas para escribir en la tabla predictions
+      PC2_DB_HOST: pc2-db
+      PC2_DB_PORT: 5432
+      PC2_DB_NAME: ${DB_DATABASE}
+      PC2_DB_USER: ${DB_USERNAME}
+      PC2_DB_PASSWORD: ${DB_PASSWORD}
     volumes:
-      # storage de Laravel persistente: logs, ficheros subidos, cache...
       - laravel_storage:/var/www/html/storage
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - eco-net
+      #conectamos tambien a la red del pc2-db para poder resolver su hostname
+      - pc2-stack_default
 
   frontend:
     build:
@@ -62,11 +37,9 @@ services:
     container_name: ecotraffic_frontend
     restart: unless-stopped
     ports:
-      # Si LORCA tiene el 80 ocupado, cambia a "8080:80" y ajusta /etc/hosts
       - "80:80"
     volumes:
-      # Sobrescribimos la nginx.conf por defecto con la nuestra,
-      # que ademas hace de proxy hacia el backend en /api.
+      #nuestra nginx.conf sobreescribe la del repo del front
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - backend
@@ -74,9 +47,11 @@ services:
       - eco-net
 
 volumes:
-  pgdata:
   laravel_storage:
 
 networks:
   eco-net:
     driver: bridge
+  #red ya existente donde vive el container pc2-db
+  pc2-stack_default:
+    external: true
